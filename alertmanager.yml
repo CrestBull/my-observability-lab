@@ -1,0 +1,12 @@
+route:                     
+  receiver: "discord"      
+  group_wait: 10s          
+  group_interval: 10s      
+  repeat_interval: 1h      
+
+receivers:
+  - name: "discord"   
+    discord_configs:
+      - webhook_url_file: /etc/alertmanager/discord_webhook.txt
+        title: '{{ if eq .Status "firing" }}제목: 🔥 문제 발생{{ else }}제목: ✅ 복구됨{{ end }}'
+        message: "장애내용: {{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}"

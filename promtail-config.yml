@@ -1,0 +1,32 @@
+# =============================================================
+# promtail-config.yml  —  컨테이너 로그를 긁어 Loki로 보내는 수집기 설정
+# 범례: [내가 정함] [기본값] [관례] [고정]
+# =============================================================
+
+server:
+  http_listen_port: 9080   # [내가 정함] Promtail 자신의 상태 포트. 값은 관례적으로 9080 사용.
+  grpc_listen_port: 0      # [내가 정함] gRPC 안 씀(0 = 비활성화).
+
+positions:
+  filename: /tmp/positions.yaml  # [내가 정함] '어디까지 읽었는지' 기록하는 파일 위치.
+                                 #   재시작해도 중복 없이 이어읽기 위함.
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    #   [내가 정함] 로그를 밀어넣을 Loki 주소.
+    #   'loki'는 compose 서비스 이름, 3100은 [관례] Loki 기본 포트.
+    #   '/loki/api/v1/push'는 [고정] Loki가 로그를 받는 정해진 경로.
+
+scrape_configs:
+  - job_name: docker         # [내가 정함] 이 수집 작업의 별명.
+    docker_sd_configs:       # [고정] '도커 컨테이너를 자동 발견해서 로그를 모아라'는 방식.
+      - host: unix:///var/run/docker.sock  # [관례] 도커에게 물어보는 통로(소켓).
+                                           #   compose에서 이 소켓을 마운트해줬기에 접근 가능.
+        refresh_interval: 5s # [내가 정함] 5초마다 새 컨테이너 있는지 확인.
+    relabel_configs:         # [고정] 수집한 로그에 라벨(꼬리표)을 붙이는 규칙.
+      - source_labels: ["__meta_docker_container_name"]  # [고정] 도커가 주는 내부 정보(컨테이너 이름).
+        regex: "/(.*)"       # [내가 정함] 앞의 '/'를 떼고 이름만 추출.
+        target_label: "container"  # [내가 정함] 그 이름을 'container' 라벨로 저장.
+                                   #   → Grafana에서 {container="lab-app"} 으로 검색 가능해진 이유.
+      - source_labels: ["__meta_docker_container_log_stream"]  # [고정] stdout/stderr 구분 정보.
+        target_label: "stream"     # [내가 정함] 'stream' 라벨로 저장.

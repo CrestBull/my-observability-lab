@@ -1,0 +1,43 @@
+# =============================================================
+# alert.rules.yml  —  "언제 경고를 울릴지" 판단 규칙 (Prometheus가 읽음)
+# 범례: [내가 정함] [기본값] [관례] [고정]
+# =============================================================
+
+groups:                          # [고정] 규칙은 'groups' 아래에 묶는다 (Prometheus 문법).
+  - name: lab-alerts             # [내가 정함] 규칙 묶음의 이름. 아무거나 가능.
+    rules:                       # [고정] 이 그룹의 규칙 목록.
+      # 전체 에러율이 5%를 30초 이상 넘으면 경고
+      - alert: HighErrorRate     # [내가 정함] 경고 이름. UI에 이 이름으로 뜸.
+        # expr: 이 조건이 참이면 경고 후보가 됨. (5xx 비율 = 에러 요청 ÷ 전체 요청)
+        expr: sum(rate(http_requests_total{status="5xx"}[1m])) / sum(rate(http_requests_total[1m])) > 0.05
+        #     └ http_requests_total 은 [관례] 이름이 아니라, 앱의 계측 라이브러리가 만든 메트릭 이름.
+        #     └ 0.05(=5%) 는 [내가 정함] 내가 정한 임계치. 더 민감/둔감하게 바꿀 수 있음.
+        #     └ [1m](최근 1분)도 [내가 정함] 관측 창.
+        for: 30s                 # [내가 정함] 조건이 '30초 이상 지속'돼야 진짜 Firing.
+                                 #   짧은 튐에 알림 남발 방지. 없으면 즉시 Firing.
+        labels:
+          severity: warning      # [내가 정함] 심각도 꼬리표. 이름도 값도 내 마음대로.
+        annotations:             # [고정] 사람이 읽을 설명을 담는 칸.
+          summary: "에러율이 높습니다 🔥"                       # [내가 정함] 제목 문구.
+          description: "최근 1분간 전체 에러율이 5%를 초과했습니다."  # [내가 정함] 상세 문구.
+
+      # 응답이 느린 요청(평균 1초 초과)이 지속되면 경고
+      - alert: SlowResponses     # [내가 정함] 두 번째 경고: 응답 지연.
+        expr: sum(rate(http_request_duration_seconds_sum[1m])) / sum(rate(http_request_duration_seconds_count[1m])) > 1
+        #     └ sum ÷ count = 평균 응답시간. > 1 → 평균 1초 초과 시. 1은 [내가 정함] 임계치.
+        for: 30s                
+        labels:
+          severity: warning     
+        annotations:
+          summary: "응답이 느립니다 🐢"                          
+          description: "최근 1분간 평균 응답시간이 1초를 초과했습니다."  
+
+      # ★ 신규: 앱이 죽었는지 감시 (에러율로는 못 잡는 사각지대)
+      - alert: AppDown
+        expr: up == 0 #{job="lab-app"} 이런식으로 특정 job만 감시할 수도 있음. 없으면 모든 job 감시.
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "앱이 죽었습니다 💀"
+          description: "lab-app이 15초 이상 응답하지 않습니다."

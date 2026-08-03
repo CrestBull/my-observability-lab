@@ -1,0 +1,99 @@
+# =============================================================
+# docker-compose.yml  —  6개 컨테이너를 한 번에 정의·실행하는 지휘서
+# 범례: [내가 정함] [기본값] [관례] [고정]
+# =============================================================
+
+services:                    # [고정] 실행할 컨테이너들의 목록.
+
+  # ── 감시 대상 앱 ──────────────────────────────
+  app:                       # [내가 정함] 서비스(=컨테이너) 별명. 다른 설정에서 'app:8000'으로 참조됨.
+    build: .                 # [내가 정함] 현재 폴더의 Dockerfile로 이미지를 직접 빌드.
+    container_name: lab-app  # [내가 정함] 컨테이너 표시 이름.
+    ports:
+      - "8000:8000"          # [내가 정함] "내PC:컨테이너" 포트 매핑. 앱이 8000이라 오른쪽은 8000.
+    restart: unless-stopped  # [내가 정함] 죽으면 자동 재시작(내가 끈 게 아니라면).
+    labels:
+      - autoheal=true 
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  # ── 메트릭 수집·판단기 ────────────────────────
+  prometheus:                # [내가 정함] 서비스 이름. (이미지 이름과 무관하게 내가 붙임)
+    image: prom/prometheus:latest  # [내가 정함] 공식 이미지 사용. latest = [기본값] 최신 태그.
+    container_name: lab-prometheus
+    ports:
+      - "9090:9090"          # [내가 정함] 왼쪽은 내 접속 포트, 오른쪽 9090은 [관례] Prometheus 기본.
+    volumes:                 # 내 설정 파일을 컨테이너 안으로 주입.
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      #   [내가 정함] 왼쪽(내 파일) : [관례] 오른쪽(Prometheus가 읽는 표준 위치) : ro(읽기전용)
+      - ./alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      #   [내가 정함] 이 위치는 prometheus.yml의 rule_files 경로와 반드시 일치해야 함.
+    restart: unless-stopped
+
+
+  # ── 시각화 ────────────────────────────────────
+  grafana:                   # [내가 정함]
+    image: grafana/grafana:latest
+    container_name: lab-grafana
+    ports:
+      - "3000:3000"          # [내가 정함] 3000은 [관례] Grafana 기본 포트.
+    environment:             # 컨테이너에 넘기는 환경변수(초기 계정).
+      - GF_SECURITY_ADMIN_USER=admin      # [내가 정함] 값은 내가, 변수 이름은 [고정](Grafana가 정한 이름).
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # [내가 정함] 실습용이라 간단히. 실제라면 강한 값으로.
+    volumes:
+      - grafana-data:/var/lib/grafana  # [내가 정함:왼쪽] 대시보드 저장용 볼륨 :
+                                       # [관례:오른쪽] Grafana가 데이터를 두는 표준 경로.
+    depends_on:
+      - prometheus           # [내가 정함] prometheus 먼저 뜬 뒤 grafana 실행.
+    restart: unless-stopped
+
+  # ── 로그 저장소 ──────────────────────────────
+  loki:                      # [내가 정함]
+    image: grafana/loki:latest
+    container_name: lab-loki
+    ports:
+      - "3100:3100"          # [내가 정함] 3100은 [관례] Loki 기본 포트.
+    restart: unless-stopped  # (설정 파일 안 넘김 → 이미지 [기본값] 설정으로 동작)
+
+  # ── 로그 수집기 ──────────────────────────────
+  promtail:                  # [내가 정함]
+    image: grafana/promtail:latest
+    container_name: lab-promtail
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro  # [내가 정함:왼쪽]:[관례:오른쪽]
+      - /var/run/docker.sock:/var/run/docker.sock          # [관례] 도커 소켓 공유 → 컨테이너 로그 접근.
+    command: -config.file=/etc/promtail/config.yml  # [내가 정함] 위에서 주입한 설정 파일을 쓰라고 지정.
+    depends_on:
+      - loki                 # [내가 정함] loki 먼저.
+    restart: unless-stopped
+
+  # ── 경고 통지기 ──────────────────────────────
+  alertmanager:              # [내가 정함] 이름. prometheus.yml의 alerting 타겟과 일치해야 함.
+    image: prom/alertmanager:latest
+    container_name: lab-alertmanager
+    ports:
+      - "9093:9093"          
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro  
+      - ./discord_webhook.txt:/etc/alertmanager/discord_webhook.txt:ro
+    restart: unless-stopped
+# ── 자동 복구 감시자 ──────────────────────────
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: lab-autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal  
+      - AUTOHEAL_INTERVAL=5                 
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  
+
+volumes:                     
+  grafana-data:   
+             
+
+

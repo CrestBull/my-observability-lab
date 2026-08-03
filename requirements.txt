@@ -1,0 +1,7 @@
+# requirements.txt — 앱 실행에 필요한 파이썬 패키지 목록 (pip install -r 로 한 번에 설치)
+# 범례: [내가 정함] [기본값] [관례]
+# 버전을 ==으로 고정한 건 [내가 정함] → 재현성 확보(언제 깔아도 같은 버전).
+
+fastapi==0.115.6                            # 웹 프레임워크
+uvicorn[standard]==0.34.0                   # FastAPI를 구동하는 ASGI 서버. [standard]=성능 부가패키지 포함
+prometheus-fastapi-instrumentator==7.0.0    # /metrics 자동 생성 라이브러리
