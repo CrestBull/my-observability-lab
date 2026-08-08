@@ -45,34 +45,33 @@ services:                    # [고정] 실행할 컨테이너들의 목록.
       - GF_SECURITY_ADMIN_USER=admin      # [내가 정함] 값은 내가, 변수 이름은 [고정](Grafana가 정한 이름).
       - GF_SECURITY_ADMIN_PASSWORD=admin  # [내가 정함] 실습용이라 간단히. 실제라면 강한 값으로.
     volumes:
-      - grafana-data:/var/lib/grafana  # [내가 정함:왼쪽] 대시보드 저장용 볼륨 :
-                                       # [관례:오른쪽] Grafana가 데이터를 두는 표준 경로.
+      - grafana-data:/var/lib/grafana  
     depends_on:
-      - prometheus           # [내가 정함] prometheus 먼저 뜬 뒤 grafana 실행.
+      - prometheus          
     restart: unless-stopped
 
   # ── 로그 저장소 ──────────────────────────────
-  loki:                      # [내가 정함]
+  loki:                      
     image: grafana/loki:latest
     container_name: lab-loki
     ports:
-      - "3100:3100"          # [내가 정함] 3100은 [관례] Loki 기본 포트.
-    restart: unless-stopped  # (설정 파일 안 넘김 → 이미지 [기본값] 설정으로 동작)
+      - "3100:3100"          
+    restart: unless-stopped  
 
   # ── 로그 수집기 ──────────────────────────────
-  promtail:                  # [내가 정함]
+  promtail:                 
     image: grafana/promtail:latest
     container_name: lab-promtail
     volumes:
-      - ./promtail-config.yml:/etc/promtail/config.yml:ro  # [내가 정함:왼쪽]:[관례:오른쪽]
-      - /var/run/docker.sock:/var/run/docker.sock          # [관례] 도커 소켓 공유 → 컨테이너 로그 접근.
-    command: -config.file=/etc/promtail/config.yml  # [내가 정함] 위에서 주입한 설정 파일을 쓰라고 지정.
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro 
+      - /var/run/docker.sock:/var/run/docker.sock         
+    command: -config.file=/etc/promtail/config.yml  
     depends_on:
-      - loki                 # [내가 정함] loki 먼저.
+      - loki                
     restart: unless-stopped
 
   # ── 경고 통지기 ──────────────────────────────
-  alertmanager:              # [내가 정함] 이름. prometheus.yml의 alerting 타겟과 일치해야 함.
+  alertmanager:              
     image: prom/alertmanager:latest
     container_name: lab-alertmanager
     ports:
@@ -91,6 +90,21 @@ services:                    # [고정] 실행할 컨테이너들의 목록.
       - AUTOHEAL_INTERVAL=5                 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  
+
+# ── 컨테이너 메트릭 수집기 ────────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: lab-cadvisor
+    ports:
+      - "8080:8080"          # 웹 UI + /metrics (관례: cAdvisor 기본 포트)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro                        # 호스트 파일시스템(읽기전용)
+      - /var/run:/var/run:ro                # 도커 런타임 상태
+      - /sys:/sys:ro                        # 커널/시스템 정보
+      - /var/lib/docker/:/var/lib/docker:ro # 도커가 컨테이너를 두는 곳
+    restart: unless-stopped
+    privileged: true         # 호스트 수준 정보 접근에 필요
 
 volumes:                     
   grafana-data:   

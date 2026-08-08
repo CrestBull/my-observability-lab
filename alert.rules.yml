@@ -41,3 +41,11 @@ groups:                          # [고정] 규칙은 'groups' 아래에 묶는�
         annotations:
           summary: "앱이 죽었습니다 💀"
           description: "lab-app이 15초 이상 응답하지 않습니다."
+      - alert: FrequentRestart
+        expr: time() - container_start_time_seconds{id=~"/docker/5ff54e71068a.*"} < 300
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "앱이 최근 재시작됨 (자동복구 작동)"
+          description: "lab-app이 5분 내에 재시작됐습니다. autoheal이 개입했을 가능성 — 근본 원인 확인 필요."
